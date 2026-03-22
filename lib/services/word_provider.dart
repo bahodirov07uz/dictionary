@@ -20,7 +20,6 @@ class WordProvider extends ChangeNotifier {
   int get learnedCount => _allWords.where((w) => w.isLearned).length;
   int get unlearnedCount => _allWords.where((w) => !w.isLearned).length;
 
-  // History
   List<HistoryItem> _history = [];
   List<HistoryItem> get history => _history;
 
@@ -63,8 +62,8 @@ class WordProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addWord(String uzbek, String english) async {
-    final word = Word(uzbek: uzbek, english: english);
+  Future<void> addWord(String uzbek, String english, {bool isLearned = false}) async {
+    final word = Word(uzbek: uzbek, english: english, isLearned: isLearned);
     final saved = await _db.insertWord(word);
     _allWords.insert(0, saved);
     _applyFilters();
@@ -99,7 +98,6 @@ class WordProvider extends ChangeNotifier {
     }
   }
 
-  // History actions
   Future<void> addToHistory(HistoryItem item) async {
     await _db.addToHistory(item);
     _history.removeWhere((h) => h.wordId == item.wordId);

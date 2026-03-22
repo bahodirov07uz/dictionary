@@ -16,34 +16,43 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _api = ApiService();
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
   List<ApiSearchResult> _results = [];
   bool _loading = false;
-  String _error = '';
   Timer? _debounce;
+  String _lastQuery = '';
 
   @override
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
+    _focusNode.dispose();
+    _api.dispose();
     super.dispose();
   }
 
   void _onChanged(String val) {
+    final q = val.trim();
+    if (q == _lastQuery) return;
+    _lastQuery = q;
+
     _debounce?.cancel();
-    if (val.trim().isEmpty) {
-      setState(() { _results = []; _error = ''; });
+    if (q.isEmpty) {
+      setState(() { _results = []; _loading = false; });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 400), () => _search(val));
+
+    // Show loading immediately
+    setState(() => _loading = true);
+
+    _debounce = Timer(const Duration(milliseconds: 150), () => _search(q));
   }
 
   Future<void> _search(String q) async {
-    setState(() { _loading = true; _error = ''; });
-    try {
-      final res = await _api.search(q);
+    final res = await _api.search(q);
+    if (!mounted) return;
+    if (_lastQuery == q) {
       setState(() { _results = res; _loading = false; });
-    } catch (e) {
-      setState(() { _error = 'Xato: $e'; _loading = false; });
     }
   }
 
@@ -63,45 +72,47 @@ class _SearchScreenState extends State<SearchScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header + Search bar
+            // Header
             Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "🔍 Qidiruv",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E)),
-                  ),
+                  const Text("Qidiruv",
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _controller,
+                    focusNode: _focusNode,
                     onChanged: _onChanged,
-                    autofocus: false,
                     style: const TextStyle(fontSize: 16),
                     decoration: InputDecoration(
-                      hintText: "Inglizcha so'z kiriting...",
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF888888)),
+                      hintText: "So'z kiriting...",
+                      prefixIcon: _loading
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1A1A2E)),
+                              ))
+                          : const Icon(Icons.search, color: Color(0xFF888888)),
                       suffixIcon: _controller.text.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 18),
                               onPressed: () {
                                 _controller.clear();
-                                setState(() { _results = []; });
-                              },
-                            )
+                                _onChanged('');
+                                _focusNode.requestFocus();
+                              })
                           : null,
                       filled: true,
                       fillColor: const Color(0xFFF5F5F5),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
+                          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 2),
-                      ),
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 2)),
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
@@ -109,17 +120,14 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
 
-            // Content
             Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A2E)))
-                  : _error.isNotEmpty
-                      ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
-                      : _results.isNotEmpty
-                          ? _buildResults()
-                          : _controller.text.isEmpty
-                              ? _buildHistory(history)
-                              : _buildEmpty(),
+              child: _results.isNotEmpty
+                  ? _buildResults()
+                  : _controller.text.isEmpty
+                      ? _buildHistory(history)
+                      : _loading
+                          ? const SizedBox.shrink()
+                          : _buildEmpty(),
             ),
           ],
         ),
@@ -129,20 +137,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildResults() {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       itemCount: _results.length,
-      itemBuilder: (ctx, i) {
-        final item = _results[i];
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          title: Text(item.word, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          subtitle: item.translations.isNotEmpty
-              ? Text(item.translations.join(', '), style: const TextStyle(color: Color(0xFF43A047)))
-              : null,
-          trailing: const Icon(Icons.chevron_right, color: Color(0xFFBBBBBB)),
-          onTap: () => _openDetail(item),
-        );
-      },
+      itemBuilder: (ctx, i) => _SearchResultTile(item: _results[i], onTap: () => _openDetail(_results[i])),
     );
   }
 
@@ -154,9 +151,11 @@ class _SearchScreenState extends State<SearchScreen> {
           children: const [
             Text("🔎", style: TextStyle(fontSize: 52)),
             SizedBox(height: 12),
-            Text("So'z qidiring", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+            Text("So'z qidiring",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
             SizedBox(height: 6),
-            Text("Ko'rilgan so'zlar bu yerda chiqadi", style: TextStyle(color: Color(0xFF888888))),
+            Text("Ko'rilgan so'zlar bu yerda chiqadi",
+                style: TextStyle(color: Color(0xFF888888))),
           ],
         ),
       );
@@ -169,11 +168,12 @@ class _SearchScreenState extends State<SearchScreen> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Row(
             children: [
-              const Text("Tarix", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1A2E))),
+              const Text("Tarix",
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1A2E))),
               const Spacer(),
               TextButton(
-                onPressed: () => _confirmClearHistory(),
-                child: const Text("Hammasini tozalash", style: TextStyle(color: Colors.red, fontSize: 12)),
+                onPressed: _confirmClearHistory,
+                child: const Text("Tozalash", style: TextStyle(color: Colors.red, fontSize: 12)),
               ),
             ],
           ),
@@ -184,24 +184,26 @@ class _SearchScreenState extends State<SearchScreen> {
             itemBuilder: (ctx, i) {
               final h = history[i];
               return Dismissible(
-                key: Key('history_${h.wordId}'),
+                key: Key('h_${h.wordId}'),
                 direction: DismissDirection.endToStart,
                 background: Container(
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
-                  color: Colors.red.shade100,
+                  color: Colors.red.shade50,
                   child: const Icon(Icons.delete_outline, color: Colors.red),
                 ),
                 onDismissed: (_) => context.read<WordProvider>().deleteHistoryItem(h.wordId),
                 child: ListTile(
-                  leading: const Icon(Icons.history, color: Color(0xFFBBBBBB)),
-                  title: Text(h.word, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(h.translations.join(', '), style: const TextStyle(color: Color(0xFF43A047), fontSize: 12)),
+                  leading: const Icon(Icons.history, color: Color(0xFFBBBBBB), size: 20),
+                  title: Text(h.word,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  subtitle: h.translations.isNotEmpty
+                      ? Text(h.translations.join(', '),
+                          style: const TextStyle(color: Color(0xFF43A047), fontSize: 12))
+                      : null,
                   trailing: const Icon(Icons.chevron_right, color: Color(0xFFBBBBBB)),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => WordDetailScreen(id: h.wordId, word: h.word)),
-                  ),
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => WordDetailScreen(id: h.wordId, word: h.word))),
                 ),
               );
             },
@@ -227,14 +229,89 @@ class _SearchScreenState extends State<SearchScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Bekor")),
           TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.read<WordProvider>().clearHistory();
-            },
+            onPressed: () { Navigator.pop(ctx); context.read<WordProvider>().clearHistory(); },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text("O'chirish"),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---- Tile (rasmga o'xshash layout) ----
+class _SearchResultTile extends StatelessWidget {
+  final ApiSearchResult item;
+  final VoidCallback onTap;
+  const _SearchResultTile({required this.item, required this.onTap});
+
+  static const _classColors = {
+    'noun': Color(0xFF1565C0),
+    'verb': Color(0xFF2E7D32),
+    'adjective': Color(0xFF6A1B9A),
+    'adverb': Color(0xFFE65100),
+    'exclamation': Color(0xFFC62828),
+    'preposition': Color(0xFF00695C),
+  };
+
+  Color _classColor(String? cls) {
+    if (cls == null) return const Color(0xFF888888);
+    for (final k in _classColors.keys) {
+      if (cls.toLowerCase().contains(k)) return _classColors[k]!;
+    }
+    return const Color(0xFF888888);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0))),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // So'z + word class bir qatorda (rasmga o'xshash)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(item.word,
+                          style: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                      if (item.wordClass != null) ...[
+                        const SizedBox(width: 8),
+                        Text(item.wordClass!,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: _classColor(item.wordClass),
+                                fontStyle: FontStyle.italic)),
+                      ],
+                    ],
+                  ),
+                  if (item.translations.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(item.translations.join(', '),
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+                  ],
+                ],
+              ),
+            ),
+            // Star indicator
+            if (item.isStar)
+              const Icon(Icons.star, color: Color(0xFFE53935), size: 20)
+            else
+              const Icon(Icons.star_border, color: Color(0xFFCCCCCC), size: 20),
+          ],
+        ),
       ),
     );
   }
