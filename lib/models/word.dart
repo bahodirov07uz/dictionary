@@ -13,39 +13,28 @@ class Word {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'uzbek': uzbek,
-      'english': english,
-      'is_learned': isLearned ? 1 : 0,
-      'created_at': createdAt.toIso8601String(),
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'uzbek': uzbek,
+        'english': english,
+        'is_learned': isLearned ? 1 : 0,
+        'created_at': createdAt.toIso8601String(),
+      };
 
-  factory Word.fromMap(Map<String, dynamic> map) {
-    return Word(
-      id: map['id'],
-      uzbek: map['uzbek'],
-      english: map['english'],
-      isLearned: map['is_learned'] == 1,
-      createdAt: DateTime.parse(map['created_at']),
-    );
-  }
+  factory Word.fromMap(Map<String, dynamic> map) => Word(
+        id: map['id'],
+        uzbek: map['uzbek'],
+        english: map['english'],
+        isLearned: map['is_learned'] == 1,
+        createdAt: DateTime.parse(map['created_at']),
+      );
 
-  Word copyWith({
-    int? id,
-    String? uzbek,
-    String? english,
-    bool? isLearned,
-    DateTime? createdAt,
-  }) {
-    return Word(
-      id: id ?? this.id,
-      uzbek: uzbek ?? this.uzbek,
-      english: english ?? this.english,
-      isLearned: isLearned ?? this.isLearned,
-      createdAt: createdAt ?? this.createdAt,
-    );
-  }
+  Word copyWith({int? id, String? uzbek, String? english, bool? isLearned, DateTime? createdAt}) =>
+      Word(
+        id: id ?? this.id,
+        uzbek: uzbek ?? this.uzbek,
+        english: english ?? this.english,
+        isLearned: isLearned ?? this.isLearned,
+        createdAt: createdAt ?? this.createdAt,
+      );
 }

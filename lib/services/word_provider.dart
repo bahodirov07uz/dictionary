@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/word.dart';
+import '../models/api_word.dart';
 import '../services/database_service.dart';
 
 class WordProvider extends ChangeNotifier {
@@ -14,34 +15,32 @@ class WordProvider extends ChangeNotifier {
   List<Word> get words => _filteredWords;
   bool get isLoading => _isLoading;
   FilterType get filterType => _filterType;
-  String get searchQuery => _searchQuery;
 
   int get totalCount => _allWords.length;
   int get learnedCount => _allWords.where((w) => w.isLearned).length;
   int get unlearnedCount => _allWords.where((w) => !w.isLearned).length;
 
+  // History
+  List<HistoryItem> _history = [];
+  List<HistoryItem> get history => _history;
+
   Future<void> loadWords() async {
     _isLoading = true;
     notifyListeners();
-
     _allWords = await _db.getAllWords();
+    _history = await _db.getHistory();
     _applyFilters();
-
     _isLoading = false;
     notifyListeners();
   }
 
   void _applyFilters() {
     List<Word> filtered = _allWords;
-
-    // Filter type
     if (_filterType == FilterType.learned) {
       filtered = filtered.where((w) => w.isLearned).toList();
     } else if (_filterType == FilterType.unlearned) {
       filtered = filtered.where((w) => !w.isLearned).toList();
     }
-
-    // Search
     if (_searchQuery.isNotEmpty) {
       filtered = filtered
           .where((w) =>
@@ -49,7 +48,6 @@ class WordProvider extends ChangeNotifier {
               w.english.toLowerCase().contains(_searchQuery.toLowerCase()))
           .toList();
     }
-
     _filteredWords = filtered;
   }
 
@@ -99,6 +97,26 @@ class WordProvider extends ChangeNotifier {
       _applyFilters();
       notifyListeners();
     }
+  }
+
+  // History actions
+  Future<void> addToHistory(HistoryItem item) async {
+    await _db.addToHistory(item);
+    _history.removeWhere((h) => h.wordId == item.wordId);
+    _history.insert(0, item);
+    notifyListeners();
+  }
+
+  Future<void> deleteHistoryItem(int wordId) async {
+    await _db.deleteHistoryItem(wordId);
+    _history.removeWhere((h) => h.wordId == wordId);
+    notifyListeners();
+  }
+
+  Future<void> clearHistory() async {
+    await _db.clearHistory();
+    _history.clear();
+    notifyListeners();
   }
 }
 
