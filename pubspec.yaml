@@ -1,5 +1,5 @@
 name: lughatim
-description: O'zbek-Ingliz lug'at ilovasi
+description: O'zbek-Ingliz lug'at ilovasi - offline
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -12,7 +12,8 @@ dependencies:
   provider: ^6.1.1
   sqflite: ^2.3.0
   path: ^1.9.0
-  http: ^1.2.0
+  path_provider: ^2.1.2
+  archive: ^3.4.9
   cupertino_icons: ^1.0.6
 
 dev_dependencies:
@@ -22,3 +23,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/wisdom.db.zip
