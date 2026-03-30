@@ -4,8 +4,6 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/wisdom_models.dart';
 
-/// Foydalanuvchi o'z so'zlarini saqlaydi (yodlandi/yodlanmadi)
-/// Import/Export JSON
 class LearnDb {
   static final LearnDb _i = LearnDb._();
   factory LearnDb() => _i;
@@ -42,27 +40,24 @@ class LearnDb {
     ''');
   }
 
-  // ─── LEARN WORDS ─────────────────────────────────────────
   Future<List<LearnWord>> getAll() async {
     final rows = await _db!.query('learn_words', orderBy: 'added_at DESC');
     return rows.map(LearnWord.fromMap).toList();
   }
 
-  Future<List<LearnWord>> getLearned() async {
-    final rows = await _db!.query('learn_words',
-        where: 'is_learned = 1', orderBy: 'added_at DESC');
-    return rows.map(LearnWord.fromMap).toList();
-  }
-
-  Future<List<LearnWord>> getUnlearned() async {
-    final rows = await _db!.query('learn_words',
-        where: 'is_learned = 0', orderBy: 'added_at DESC');
-    return rows.map(LearnWord.fromMap).toList();
-  }
-
   Future<LearnWord> insert(LearnWord w) async {
-    final id = await _db!.insert('learn_words', w.toMap()..remove('id'));
-    return w.copyWith()..id == id;
+    final map = w.toMap()..remove('id');
+    final id = await _db!.insert('learn_words', map);
+    return LearnWord(
+      id: id,
+      english: w.english,
+      uzbek: w.uzbek,
+      wordClass: w.wordClass,
+      example: w.example,
+      wordEntityId: w.wordEntityId,
+      isLearned: w.isLearned,
+      addedAt: w.addedAt,
+    );
   }
 
   Future<bool> exists(int wordEntityId) async {
@@ -92,11 +87,8 @@ class LearnDb {
   }
 
   Future<void> addHistory(HistoryItem item) async {
-    await _db!.insert(
-      'view_history',
-      item.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _db!.insert('view_history', item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> deleteHistory(int wordEntityId) async {
@@ -120,17 +112,14 @@ class LearnDb {
     });
   }
 
-  /// Returns: (imported, skipped) counts
   Future<(int, int)> importJson(String jsonStr) async {
     final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-    final list = (data['words'] as List<dynamic>);
+    final list = data['words'] as List<dynamic>;
     int imported = 0, skipped = 0;
-
     for (final item in list) {
       try {
         final w = LearnWord.fromJson(item as Map<String, dynamic>);
-        final already = await exists(w.wordEntityId);
-        if (already) {
+        if (await exists(w.wordEntityId)) {
           skipped++;
         } else {
           await insert(w);
